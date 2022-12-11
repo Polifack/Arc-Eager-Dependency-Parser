@@ -1,52 +1,60 @@
 from .ArcEagerConfig import ArcEagerConfig
 from ..ConllTree.ConllTree import ConllTree
 from .constants import *
-import keras
-import pickle
 
 from keras.utils import pad_sequences
 
 import copy
 import numpy as np
+from datetime import datetime
+
 
 
 class ArcEagerParser:
     '''
-    Class that given a target ConllTree returns the
-    actions necesary to build it from the word sentence
-    using the ArcEager Transition algorithm
+    Class defining the arc-eager parser state machine. The parser
+    is initialized with a sequence length and a ConllTree object
+    containing the training data. The parser is then able to
+    generate the configurations for the training of the oracle
+    and to predict the next action given a configuration.
+    
+    The parser is initialized with a sequence length. This is the
+    number of words and postags to consider in the training of the
+    oracle. The parser is then initialized with a ConllTree object
+    containing the training data. The parser is then able to generate
+    the configurations for the training of the oracle and to predict
+    the next action given a configuration.
     '''
   
-    def __init__(self, seq_l=2):        
-        self.n_words          = None
-        self.n_postags        = None
-        self.n_relations      = None
-        self.model            = None
-        self.history          = None
-        self.word_tokenizer   = None
-        self.postag_tokenizer = None
-        self.rel_tokenizer    = None
-        self.seq_l            = seq_l
-        self.conll_tree     = None
-        self.target_edges   = None
+    def __init__(self, seq_l=2):    
+        # training sequence length (i.e. the number of words/postags to consider)    
+        self.seq_l           = seq_l
+        
+        # store words and postags to obtain a configuration to train the oracle
         self.words          = None
         self.postags        = None
-        self.configuration  = []
+
+        # arc-eager parser state machine fields
+        self.conll_tree     = None
+        self.target_edges   = None
         self.buffer         = []
         self.stack          = []
+        self.configuration  = []
 
     #############
     # INITIALIZE
     #############
     
     def reset(self):
-        self.configuration = []
-        self.stack = []
-        self.buffer = []
-        self.words = []
-        self.postags = []
-        self.conll_tree = None
-        self.target_edges = None
+        self.words          = []
+        self.postags        = []
+        
+        self.conll_tree     = None
+        self.target_edges   = None
+        self.configuration  = []
+        self.stack          = []
+        self.buffer         = []
+
 
 
     def init_sentence_raw(self, words, postags):
@@ -54,6 +62,7 @@ class ArcEagerParser:
         Given a raw sentence shaped as a string initializes
         the parser in order to predict it
         '''
+
         # reset state machine
         self.reset()
 
@@ -72,6 +81,7 @@ class ArcEagerParser:
         Given a ConllTree object initializes the parser with
         its edges and resets the configuration
         '''
+
         # reset state machine
         self.reset()
 
@@ -86,7 +96,7 @@ class ArcEagerParser:
         self.buffer        = conll_tree.get_indexes()[1:]
 
     #############
-    # EXECUTIONS
+    # ACTIONS
     #############
 
     def left_arc(self):
@@ -104,10 +114,15 @@ class ArcEagerParser:
         self.buffer.remove(self.buffer[0])
   
     #############
-    # ORACLE
+    # GET PARSER CONFIG
     #############
 
     def get_actions_mask(self):
+        '''
+        Returns a boolean mask of valid actions given the current
+        state of the parser
+        '''
+
         valid_actions = [True, True, True, True]
         
         # with no buffer we cant shift, r_arc or l_arc
@@ -136,6 +151,7 @@ class ArcEagerParser:
         '''
         Returns an array with the valid actions to take at any given moment
         '''
+
         valid_actions = self.get_actions_mask()
         arc = None
 
@@ -161,19 +177,25 @@ class ArcEagerParser:
         
         return valid_actions, arc
 
-    def train_on_list(self, dependency_trees):
+    def get_parser_config_list(self, dependency_trees):
         '''
-        Trains the parser on a list of dependency trees
+        Gets the arc-eager configuration for a list of
+        dependency trees
         '''
+
         configs = []
         for tree in dependency_trees:
-            tree_config = self.train(tree)
+            tree_config = self.get_parser_config(tree)
             for c in tree_config:
                 configs.append(c)
         return configs
 
-    def train(self, dependency_tree):
-        # initialize dep tree
+    def get_parser_config(self, dependency_tree):
+        '''
+        Gets the arc-eager configuration for a single 
+        dependency tree
+        '''
+
         self.init_tree(dependency_tree)
         
         while True:
@@ -206,42 +228,59 @@ class ArcEagerParser:
         
         return [c.get_train(self.words, self.postags, n=self.seq_l) for c in  self.configuration]
 
+    #############
+    # PREDICTION
+    #############
 
-    def predict_next_action(self):
+    def predict_next_action(self, oracle):
         '''
         Returns an array with the valid actions to take at any given moment
         '''
-        if self.model is None:
-            if self.model is None:
-                print("[*] Error: Model has not been yet created")
-            return
-        
-        ws,wb,ps,pb,_,_ = self.configuration[-1].get_train(self.words, self.postags, n=self.seq_l)
 
-        wsp = pad_sequences(self.word_tokenizer.texts_to_sequences([ws]), maxlen=self.seq_l, padding='pre', truncating='post', value=0)
-        wbp = pad_sequences(self.word_tokenizer.texts_to_sequences([wb]), maxlen=self.seq_l, padding='post', truncating='post', value=0)
-        
-        psp = pad_sequences(self.postag_tokenizer.texts_to_sequences([ps]), maxlen=self.seq_l, padding='pre', truncating='post', value = 0)
-        pbp = pad_sequences(self.postag_tokenizer.texts_to_sequences([pb]), maxlen=self.seq_l, padding='post', truncating='post', value = 0)
-
-        x = [wsp, wbp, psp, pbp]
-        valid_actions, relation = self.model.predict(x, verbose=False)
+        current_config = self.configuration[-1].get_train(self.words, self.postags, n=self.seq_l)
+        valid_actions, relation  = oracle.predict([current_config])
 
         # filter the predicted actions with the valid actions
         valid_actions = valid_actions * self.get_actions_mask()
-
-        # decode relation
-        relation = self.rel_tokenizer.sequences_to_texts([[np.argmax(relation)]])
                     
         return valid_actions, relation
 
-    def predict(self, words, postags):
+
+    def predict_dependency_tree_list(self, w_list, p_list, model):
+        '''
+        Predicts the dependency tree for a list of sentences
+        '''
+
+        dependency_trees = []
+        t1 = datetime.now()
+        wc = 0
+        nt = 0
+        for w, p in zip(w_list, p_list):
+            dependency_trees.append(self.predict_dependency_tree(w, p, model))
+            wc += len(w)
+            nt += 1
+        delta = datetime.now() - t1
+        
+        print("Time: ", delta)
+        print("Total tokens: ", wc)
+        print("Total sentences: ", nt)
+        print("Tokens per second: ", wc/delta.total_seconds())
+        print("Sentences per second: ", nt/delta.total_seconds())
+
+
+        return dependency_trees
+
+    def predict_dependency_tree(self, words, postags, model):
+        '''
+        Predicts the dependency tree for a single sentence
+        '''
+
         # initialize sentence
         self.init_sentence_raw(words, postags)
         
         while len(self.stack)>0 or len(self.buffer)>0:
             # predict actions list and (if arc made) relation
-            valid_actions, rel = self.predict_next_action()
+            valid_actions, rel = self.predict_next_action(model)
             
             # the action will be the one that is non-zero item most on the left of the array (highest priority)
             action = np.argmax(valid_actions)
@@ -272,20 +311,8 @@ class ArcEagerParser:
             config = ArcEagerConfig(action, arc, copy.deepcopy(self.stack), copy.deepcopy(self.buffer))
             self.configuration.append(config)
         
-        self.build_conll_tree(self)
+        self.build_conll_tree()
         return self.conll_tree
-
-    def predict_file(self, file_path_in, file_path_out):
-        '''
-        Given a conll-u file with a list of dependency trees
-        it predicts the dependency tree for each one of them and
-        saves them to file_path
-        '''
-        trees = ConllTree.read_conllu_file(file_path_in)
-        for tree in trees:
-            self.predict(tree.get_words(), tree.get_postags())
-            self.conll_tree.write_conllu_file(file_path_out)
-            self.reset()
 
     def build_conll_tree(self):
         '''
@@ -296,24 +323,13 @@ class ArcEagerParser:
         for c in self.configuration:
             if c.arc is not None:
                 arcs.append(c.arc)
-
+        arcs = sorted(arcs, key=lambda x: x[0][0])
         # build the tree
-        self.conll_tree = ConllTree.build_tree(self.words, self.postags, arcs)
+        self.conll_tree = ConllTree.build_tree(self.words[1:], self.postags[1:], arcs)
 
     #############
     # EVALUATION
     #############
-  
-    def get_train_config(self):
-        '''
-        Returns the configuration formated to train a neural network.
-        '''
-        # extract required info
-        dataset       = []
-        
-        for c in self.configuration:
-            dataset.append(c.get_train(self.words, self.postags, self.seq_l))
-        return dataset
 
     def assert_sentence(self, sentence):
         '''

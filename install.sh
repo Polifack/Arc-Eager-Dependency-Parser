@@ -10,5 +10,6 @@ echo "*** Installing Libraries"
 python -m pip install tensorflow==2.9.2
 python -m pip install keras==2.9.0
 python -m pip install matplotlib
+python -m pip install numpy
 
 echo "*** All done"

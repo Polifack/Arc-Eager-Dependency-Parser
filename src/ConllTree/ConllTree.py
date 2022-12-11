@@ -1,12 +1,13 @@
 from .ConllNode import ConllNode
-
-D_ROOT_HEAD = 0
-D_ROOT_REL = 1
+from .ConllTreeConstants import *
 
 class ConllTree:
     def __init__(self, nodes):
         self.nodes = nodes
     
+    def get_node(self, id):
+        return self.nodes[id-1]
+
     def get_edges(self):
         '''
         Return sentence dependency edges as a tuple 
@@ -112,21 +113,31 @@ class ConllTree:
         Postprocess the tree by finding the root according to the selected 
         strategy and fixing cycles and out of bounds heads
         '''
-        self.fix_head_conflicts()
+        # 1) Find the root
         root = self.root_search(D_ROOT_HEAD)
+        # 2) Fix oob heads
         self.fix_oob_heads()
+        # 3) Fix cycles
         self.fix_cycles(root)
+        
+        # 4) Set all null heads to root
+        for node in self.nodes:
+            if node.id == root:
+                continue
+            if node.head == D_NULLHEAD:
+                node.head = root
 
     def root_search(self, search_root_strat):
         '''
         Search for the root of the tree using the method indicated
         '''
-        root = 0
+        root = 1 # Default root
         for node in self.nodes:    
             if search_root_strat == D_ROOT_HEAD:
                 if node.head == 0:
                     root = node.id
                 break
+            
             elif search_root_strat == D_ROOT_REL:
                 if node.rel == 'root' or node.rel == 'ROOT':
                     root = node.id
@@ -139,37 +150,27 @@ class ConllTree:
         If a head is out of bounds set it to nullhead
         '''
         for node in self.nodes:
-            if node.head==ConllNode.D_NULLHEAD:
+            if node.head==D_NULLHEAD:
                 continue
             if int(node.head) < 0:
-                node.head = ConllNode.D_NULLHEAD
+                node.head = D_NULLHEAD
             elif int(node.head) > len(self.nodes):
-                node.head = ConllNode.D_NULLHEAD
+                node.head = D_NULLHEAD
     
-    def fix_cycles(self, root_id=0):
+    def fix_cycles(self, root):
         '''
-        Fixes cycles in the tree
+        Breaks cycles in the tree by setting the head of the node to root_id
         '''
         for node in self.nodes:
-            visited = []
-            
-            while (node.id != root_id) and (node.head != ConllNode.D_NULLHEAD):
-                if node in visited:
-                    node.head = ConllNode.D_NULLHEAD
-                else:
-                    visited.append(node)
-                    next_node = min(max(node.head-1, 0), len(self.nodes)-1)
-                    node = self.nodes[next_node]
-    
-    def fix_head_conflicst(self):
-        '''
-        Fixes head conflicts in the tree. If a node has more than one head,
-        the head with the lowest id is selected
-        '''
-        relations = self.get_relations()
-        for node in self.nodes:
-            if len(relations.filter(lambda x: x[0][0] == node.id))>1:
-                node.head = min(relations.filter(lambda x: x[0][0] == node.id))
+            visisted = []
+            current = node
+            while current.head != D_NULLHEAD and (current.id != root):
+                if current.head in visisted:
+                    current.head = D_NULLHEAD
+                    break
+                visisted.append(current.head)
+                current = self.get_node(current.head)
+
         
     
     def __repr__(self):
@@ -224,8 +225,23 @@ class ConllTree:
         nodes = []
         nodes.append(ConllNode.dummy_root())
         for i in range(len(words)):
-            nodes.append(ConllNode(wid=i+1, form=words[i], postag=postags[i], head=relations[i][0][1], relation=relations[i][1]))
-        return ConllTree(nodes)
+
+            # get the relation for the current word
+            # if no relation is found, set the head to 0
+            r  = list(filter(lambda x: x[0][0]==i+1, relations))
+            if len(r)==0:
+                h = 0
+                dr = 'root'
+            else:
+                h  = r[0][0][1]
+                dr = r[0][1]
+
+            nodes.append(ConllNode(wid=i+1, 
+                                    form=words[i], 
+                                    upos=postags[i], 
+                                    head=h, 
+                                    deprel=dr))
+        return ConllTree(nodes[1:])
 
     @staticmethod
     def read_conllu_file(file_path, filter_projective = True):

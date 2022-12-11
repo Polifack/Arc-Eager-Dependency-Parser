@@ -1,9 +1,7 @@
-D_EMPTYREL = "-NOREL-"
-D_POSROOT  = "-ROOT-"
-D_NULLHEAD = "-NULL-"
+from .ConllTreeConstants import *
 
 class ConllNode:
-    def __init__(self, wid, form, lemma, upos, xpos, feats, head, deprel, deps, misc):
+    def __init__(self, wid, form, lemma=None, upos=None, xpos=None, feats=None, head=None, deprel=None, deps=None, misc=None):
         self.id = wid                           # word id
         
         self.form = form if form else "_"       # word 
