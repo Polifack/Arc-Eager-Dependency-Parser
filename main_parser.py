@@ -43,7 +43,7 @@ if __name__=="__main__":
         arcEagerModel.compile_model(loss="categorical_crossentropy", optimizer=args.optimizer, learning_rate=args.lr, metrics=["acc"])
         history = arcEagerModel.train(train_config, dev_config, args.epochs, args.batch_size, 1)
         
-        arcEagerModel.save(args.output + "/model")
+        arcEagerModel.save_model(args.output + "/model")
     
     elif args.mode == 'eval':
         print("[*] Evaluation mode")
