@@ -110,7 +110,10 @@ class ArcEagerModel:
         concat = concatenate([word_stack_emb, word_buffer_emb, pos_stack_emb, pos_buffer_emb])
         flatten = Flatten()(concat)
 
-        hlayer = Dense(units=self.h_dim, activation = 'relu', name = 'hlayer')(flatten)
+        if self.h_dim > 0:
+            hlayer = Dense(units=self.h_dim, activation = 'relu', name = 'hlayer')(flatten)
+        else:
+            hlayer = flatten
 
         action_out = Dense(units = self.a_num, activation = 'softmax', name="action")(hlayer)
 
