@@ -47,7 +47,7 @@ if __name__=="__main__":
     
     elif args.mode == 'eval':
         print("[*] Evaluation mode")
-        test  = ConllTree.read_conllu_file(args.input + "/test.conllu", filter_projective=False)
+        test  = ConllTree.read_conllu_file(args.input + "/test.conllu", filter_projective=False)[:10]
         test_w = [t.get_words() for t in test]
         test_p = [t.get_postags() for t in test]
 

@@ -133,19 +133,17 @@ class ConllTree:
         '''
         root = 1 # Default root
         for node in self.nodes:    
-            if search_root_strat == D_ROOT_HEAD:
-                if node.head == 0:
-                    root = node.id
-                break
+            if search_root_strat == D_ROOT_HEAD and node.head == 0:
+                root = node.id
+                return root
             
-            elif search_root_strat == D_ROOT_REL:
-                if node.rel == 'root' or node.rel == 'ROOT':
-                    root = node.id
-                break
+            elif search_root_strat == D_ROOT_REL and (node.rel == 'root' or node.rel == 'ROOT'):
+                root = node.id
+                return root
         
         # ensure root
-        self.nodes[1].head = 0
-        self.nodes[1].rel = 'root'
+        self.nodes[root].head = 0
+        self.nodes[root].relation = 'root'
 
         return root
 
