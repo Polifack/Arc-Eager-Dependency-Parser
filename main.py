@@ -18,6 +18,7 @@ if __name__=="__main__":
     parser.add_argument('--hidden_size', type=int, default=256, help='hidden size')
     parser.add_argument('--embedding_size', type=int, default=128, help='embedding size')
     parser.add_argument('--postprocess', action='store_true', default=True, help='postprocess the predictions')
+    parser.add_argument('--multi-root', action='store_false', default=True, help='allow multi-root trees')
 
     args = parser.parse_args()
 
@@ -47,7 +48,7 @@ if __name__=="__main__":
     
     elif args.mode == 'eval':
         print("[*] Evaluation mode")
-        test  = ConllTree.read_conllu_file(args.input + "/test.conllu", filter_projective=False)
+        test  = ConllTree.read_conllu_file(args.input + "/test.conllu", filter_projective=False)[:100]
         test_w = [t.get_words() for t in test]
         test_p = [t.get_postags() for t in test]
 
@@ -60,7 +61,7 @@ if __name__=="__main__":
         if args.postprocess:
             print("[*] Postprocessing the test set...")
             for tree in test_pred:
-                tree.postprocess_tree()
+                tree.postprocess_tree(root_uniqueness=args.multi_root)
         
         print("[*] Writing the test set...")
         ConllTree.write_conllu_file(args.output + "/test_pred.conllu", test_pred)

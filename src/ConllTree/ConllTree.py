@@ -108,13 +108,13 @@ class ConllTree:
         return True
     
 
-    def postprocess_tree(self):
+    def postprocess_tree(self, root_uniqueness=True, search_root_strat=D_ROOT_HEAD):
         '''
         Postprocess the tree by finding the root according to the selected 
         strategy and fixing cycles and out of bounds heads
         '''
         # 1) Find the root
-        root = self.root_search(D_ROOT_HEAD)
+        root = self.root_search(search_root_strat)
         # 2) Fix oob heads
         self.fix_oob_heads()
         # 3) Fix cycles
@@ -125,6 +125,8 @@ class ConllTree:
             if node.id == root:
                 continue
             if node.head == D_NULLHEAD:
+                node.head = root
+            if root_uniqueness and node.head == 0:
                 node.head = root
 
     def root_search(self, search_root_strat):
