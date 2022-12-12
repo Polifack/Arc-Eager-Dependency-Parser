@@ -270,6 +270,11 @@ class ArcEagerModel:
                 e_dim = layer['config']['output_dim']
             if layer['name'] == 'hlayer':
                 h_dim = layer['config']['units']
+
+        print("[*] Model loaded")
+        print("    Sequence length: {}".format(seq_l))
+        print("    Embedding dimension: {}".format(e_dim))
+        print("    Hidden layer dimension: {}".format(h_dim))
         
         arcEagerModel = ArcEagerModel(seq_l, e_dim, h_dim)
         arcEagerModel.model = keras_model
