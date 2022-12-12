@@ -7,9 +7,10 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Arc Eager Parser')
 
     parser.add_argument('mode', metavar='model', type=str, choices=['train', 'eval'], help='train or predict')
-    parser.add_argument('--model', type=str, help='saved model path')
     parser.add_argument('--input', type=str, help='folder path to input data (train, dev, test)')
     parser.add_argument('--output', type=str, help='folder path to save the model or the predictions')
+    
+    # training arguments
     parser.add_argument('--seq_l', type=int, default=2, help='sequence length')
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
@@ -17,8 +18,12 @@ if __name__=="__main__":
     parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'sgd', 'rmsprop'], help='optimizer')
     parser.add_argument('--hidden_size', type=int, default=256, help='hidden size')
     parser.add_argument('--embedding_size', type=int, default=128, help='embedding size')
+
+    # evaluation arguments
+    parser.add_argument('--model', type=str, help='saved model path')
     parser.add_argument('--postprocess', action='store_true', default=True, help='postprocess the predictions')
     parser.add_argument('--multi-root', action='store_false', default=True, help='allow multi-root trees')
+    parser.add_argument('--n_samples', type=int, default=-1, help='number of samples to predict')
 
     args = parser.parse_args()
 
@@ -48,7 +53,17 @@ if __name__=="__main__":
     
     elif args.mode == 'eval':
         print("[*] Evaluation mode")
-        test  = ConllTree.read_conllu_file(args.input + "/test.conllu", filter_projective=False)[:100]
+        print("    Postprocess: ", args.postprocess)
+        print("    Multi-root: ", args.multi_root)
+        
+        # load the data cleaning multi-expression and empty tokens and NOT filtering projective trees
+        if args.n_samples > 0:
+            test_gold = ConllTree.read_conllu_file(args.input + "/test.conllu", filter_projective=False, dummy_root=False)[:args.n_samples]
+            test  = ConllTree.read_conllu_file(args.input + "/test.conllu", filter_projective=False)[:args.n_samples]
+        else:
+            test_gold = ConllTree.read_conllu_file(args.input + "/test.conllu", filter_projective=False, dummy_root=False)
+            test  = ConllTree.read_conllu_file(args.input + "/test.conllu", filter_projective=False)
+
         test_w = [t.get_words() for t in test]
         test_p = [t.get_postags() for t in test]
 
@@ -64,4 +79,5 @@ if __name__=="__main__":
                 tree.postprocess_tree(root_uniqueness=args.multi_root)
         
         print("[*] Writing the test set...")
+        ConllTree.write_conllu_file(args.output + "/test_clean.conllu", test_gold)
         ConllTree.write_conllu_file(args.output + "/test_pred.conllu", test_pred)

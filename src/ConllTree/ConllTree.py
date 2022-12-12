@@ -249,7 +249,7 @@ class ConllTree:
         return ConllTree(nodes[1:])
 
     @staticmethod
-    def read_conllu_file(file_path, filter_projective = True):
+    def read_conllu_file(file_path, filter_projective = True, dummy_root = True):
         '''
         Read a conllu file and return a list of ConllTree objects.
         '''
@@ -259,7 +259,7 @@ class ConllTree:
         
         trees = []
         for x in data:
-            t = ConllTree.from_string(x)
+            t = ConllTree.from_string(x, dummy_root=dummy_root)
             if not filter_projective or t.is_projective():
                 trees.append(t)
         return trees    
