@@ -254,7 +254,7 @@ class ArcEagerModel:
           plt.savefig(filename)
 
     def plot_model_architecture(self, path):
-        plot_model(self.model.summary, to_file=path, show_shapes=True, show_layer_names=True)
+        plot_model(self.model, to_file=path, show_shapes=True, show_layer_names=True)
     
     @staticmethod
     def from_file(model_path):
