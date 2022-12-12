@@ -253,19 +253,19 @@ class ArcEagerParser:
 
         dependency_trees = []
         t1 = datetime.now()
-        wc = 0
-        nt = 0
+        n_sents = 0
+        n_token = 0
         for w, p in zip(w_list, p_list):
             dependency_trees.append(self.predict_dependency_tree(w, p, model))
-            wc += len(w)
-            nt += 1
+            n_token += len(w)
+            n_sents += 1
         delta = datetime.now() - t1
         
         print("Time: ", delta)
-        print("Total tokens: ", wc)
-        print("Total sentences: ", nt)
-        print("Tokens per second: ", wc/delta.total_seconds())
-        print("Sentences per second: ", nt/delta.total_seconds())
+        print("Total tokens: ", n_token)
+        print("Total sentences: ", n_token)
+        print("Tokens per second: ", n_token/delta.total_seconds())
+        print("Sentences per second: ", n_token/delta.total_seconds())
 
 
         return dependency_trees

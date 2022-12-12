@@ -142,6 +142,11 @@ class ConllTree:
                 if node.rel == 'root' or node.rel == 'ROOT':
                     root = node.id
                 break
+        
+        # ensure root
+        self.nodes[1].head = 0
+        self.nodes[1].rel = 'root'
+
         return root
 
     def fix_oob_heads(self):
