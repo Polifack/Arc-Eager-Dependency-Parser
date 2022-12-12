@@ -55,6 +55,7 @@ if __name__=="__main__":
         print("[*] Plot mode")
         arcEagerModel = ArcEagerModel.from_file(args.model)
         arcEagerModel.plot_history(True, args.output + "/model.png")
+        arcEagerModel.plot_model_architecture(args.output + "/model_architecture.png")
 
     elif args.mode == 'eval':
         print("[*] Evaluation mode")

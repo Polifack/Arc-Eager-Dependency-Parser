@@ -3,6 +3,7 @@ from keras.utils import to_categorical, pad_sequences
 from keras.models import Model, load_model
 from keras.optimizers import Adam, SGD
 from keras.layers import Input, concatenate, Dense, Embedding, Flatten, TimeDistributed, Dropout, Activation
+from keras.utils import plot_model
 from pickle import dump, load
 from numpy import argmax
 
@@ -252,6 +253,8 @@ class ArcEagerModel:
         if save_file:
           plt.savefig(filename)
 
+    def plot_model_architecture(self, path):
+        plot_model(self.model.summary, to_file=path, show_shapes=True, show_layer_names=True)
     
     @staticmethod
     def from_file(model_path):
