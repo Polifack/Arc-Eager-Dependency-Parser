@@ -265,7 +265,7 @@ class ArcEagerParser:
         print("Total tokens: ", n_token)
         print("Total sentences: ", n_token)
         print("Tokens per second: ", n_token/delta.total_seconds())
-        print("Sentences per second: ", n_token/delta.total_seconds())
+        print("Sentences per second: ", n_sents/delta.total_seconds())
 
 
         return dependency_trees
