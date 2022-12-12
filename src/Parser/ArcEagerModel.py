@@ -6,7 +6,7 @@ from keras.layers import Input, concatenate, Dense, Embedding, Flatten, TimeDist
 from pickle import dump, load
 from numpy import argmax
 
-import matplotlib as plt
+from matplotlib import pyplot as plt
 
 class ArcEagerModel:
     '''
@@ -211,36 +211,36 @@ class ArcEagerModel:
 
         fig, (fig_1, fig_2) = plt.subplots(2, figsize=(15, 15))
 
-        fig_1.set_title('Accuracy')
-        fig_1.plot(h['acc'], color='blue', label='Training')
-        fig_1.plot(h['val_acc'], color='red', label='Validation')
-        fig_1.set_ylim([0, 1])
+        fig_1.set_title('Action Accuracy')
+        fig_1.plot(h['action_acc'], color='blue', label='Training')
+        fig_1.plot(h['val_action_acc'], color='red', label='Validation')
+        
 
-        x_tr = len(h['acc'])-1
-        y_tr = h['acc'][-1]
+        x_tr = len(h['action_acc'])-1
+        y_tr = h['action_acc'][-1]
         text_tr = "{:.2f}".format(100*y_tr)+"%"
 
         fig_1.annotate(text_tr,xy=(x_tr,y_tr))
 
-        x_val = len(h['val_acc'])-1
-        y_val = h['val_acc'][-1]
+        x_val = len(h['val_action_acc'])-1
+        y_val = h['val_action_acc'][-1]
         text_val = "{:.2f}".format(100*y_val)+"%"
 
         fig_1.annotate(text_val,xy=(x_val,y_val))
 
-        fig_2.set_title('Loss')
-        fig_2.plot(h['loss'], color='blue', label='Training')
-        fig_2.plot(h['val_loss'], color='red', label='Validation')
-        fig_2.set_ylim([0, 0.5])
+        fig_2.set_title('Relation Accuracy')
+        fig_2.plot(h['relation_acc'], color='blue', label='Training')
+        fig_2.plot(h['val_relation_acc'], color='red', label='Validation')
+        
 
-        x_tr = len(h['loss'])-1
-        y_tr = h['loss'][-1]
+        x_tr = len(h['relation_acc'])-1
+        y_tr = h['relation_acc'][-1]
         text_tr = "{:.2f}".format(100*y_tr)+"%"
 
         fig_2.annotate(text_tr,xy=(x_tr,y_tr))
 
-        x_val = len(h['val_loss'])-1
-        y_val = h['val_loss'][-1]
+        x_val = len(h['val_relation_acc'])-1
+        y_val = h['val_relation_acc'][-1]
         text_val = "{:.2f}".format(100*y_val)+"%"
 
         fig_2.annotate(text_val,xy=(x_val,y_val))

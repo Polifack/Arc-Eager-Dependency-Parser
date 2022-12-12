@@ -6,7 +6,7 @@ from src.ConllTree.ConllTree import ConllTree
 if __name__=="__main__":
     parser = argparse.ArgumentParser(description='Arc Eager Parser')
 
-    parser.add_argument('mode', metavar='model', type=str, choices=['train', 'eval'], help='train or predict')
+    parser.add_argument('mode', metavar='model', type=str, choices=['train', 'eval', 'plot'], help='train or predict')
     parser.add_argument('--input', type=str, help='folder path to input data (train, dev, test)')
     parser.add_argument('--output', type=str, help='folder path to save the model or the predictions')
     
@@ -51,6 +51,11 @@ if __name__=="__main__":
         
         arcEagerModel.save_model(args.output + "/model")
     
+    elif args.mode == 'plot':
+        print("[*] Plot mode")
+        arcEagerModel = ArcEagerModel.from_file(args.model)
+        arcEagerModel.plot_history(True, args.output + "/model.png")
+
     elif args.mode == 'eval':
         print("[*] Evaluation mode")
         print("    Postprocess: ", args.postprocess)
