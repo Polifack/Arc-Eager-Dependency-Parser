@@ -124,12 +124,6 @@ class ArcEagerParser:
         '''
 
         valid_actions = [True, True, True, True]
-        
-        # with no buffer we cant shift, r_arc or l_arc
-        if len(self.buffer) <= 0:
-            valid_actions[A_SHIFT] = False
-            valid_actions[A_RIGHT_ARC] = False
-            valid_actions[A_LEFT_ARC] = False
 
         # without stack we cant reduce
         if len(self.stack) <= 0: valid_actions[A_REDUCE] = False
@@ -198,7 +192,7 @@ class ArcEagerParser:
 
         self.init_tree(dependency_tree)
         
-        while True:
+        while self.buffer != []:
             # get action
             valid_actions, arc = self.get_next_action()
             action = np.argmax(valid_actions)
@@ -278,7 +272,7 @@ class ArcEagerParser:
         # initialize sentence
         self.init_sentence_raw(words, postags)
         
-        while len(self.stack)>0 or len(self.buffer)>0:
+        while self.buffer!=[]:
             # predict actions list and (if arc made) relation
             valid_actions, rel = self.predict_next_action(model)
             
