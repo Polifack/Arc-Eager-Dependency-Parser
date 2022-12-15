@@ -72,7 +72,7 @@ The model is a simple feed-forward neural network with the following layers:
 - Dense layer: Dense layer with hidden size neurons.
 
 The model is trained by default with the Adam optimizer and the categorical crossentropy loss function. The model architecture is the following:
-![Model architecture](http://github.com/polifack/Arc-Eager-Dependency-Parser/blob/master/pics/model_architecture.png)
+![Model architecture](http://github.com/polifack/Arc-Eager-Dependency-Parser/blob/main/pics/model_architecture.png)
 
 ## Transitions
 
@@ -98,7 +98,7 @@ The code is structured as follows:
 Results are obtained using the evaluation script provided by the CoNLL 2018 shared task. We will employ the LAS and UAS metrics. We will perform experiments for different sequence lengths and different hidden sizes on the English-ParTUT dataset. We employed a categorical cross-entropy loss function, a learning rate of 0.001 with adam optimizer and a 128-sized embeddings layer for both words and part of speech tags. The activation functions for all the experiments are relu and softmax for the hidden dense layer and the output dense layers, respectively. In order to measure the speed of the parser we employed Google Colab free plan machine. The first batch of experiments employed the same number of words taken from the stack and buffer and the results can be seen in table (a). The second batch of experiments were performed employing only a 256 dense dimension
 and tweaked the number of words taken from the stack and buffer separately and can be seen in (b).
 
-![Results](http://github.com/polifac/Arc-Eager-Dependency-Parser/blob/master/pics/results.png)
+![Results](http://github.com/polifac/Arc-Eager-Dependency-Parser/blob/main/pics/results.png)
 
 We also included the Google Colab notebook used for the experiments in the repository. They can be found in the notebooks folder.
 
