@@ -26,9 +26,10 @@ class ArcEagerParser:
     the next action given a configuration.
     '''
   
-    def __init__(self, seq_l=2):    
+    def __init__(self, seq_l_s=2, seq_l_b=2):    
         # training sequence length (i.e. the number of words/postags to consider)    
-        self.seq_l           = seq_l
+        self.seq_l_s        = seq_l_s
+        self.seq_l_b        = seq_l_b
         
         # store words and postags to obtain a configuration to train the oracle
         self.words          = None
@@ -220,7 +221,7 @@ class ArcEagerParser:
             elif action == A_SHIFT: 
                 self.shift()
         
-        return [c.get_train(self.words, self.postags, n=self.seq_l) for c in  self.configuration]
+        return [c.get_train(self.words, self.postags, n_stack=self.seq_l_s, n_buffer=self.seq_l_b) for c in  self.configuration]
 
     #############
     # PREDICTION
@@ -231,7 +232,7 @@ class ArcEagerParser:
         Returns an array with the valid actions to take at any given moment
         '''
 
-        current_config = self.configuration[-1].get_train(self.words, self.postags, n=self.seq_l)
+        current_config = self.configuration[-1].get_train(self.words, self.postags, n_stack=self.seq_l_s, n_buffer=self.seq_l_b)
         valid_actions, relation  = oracle.predict([current_config])
 
         # filter the predicted actions with the valid actions

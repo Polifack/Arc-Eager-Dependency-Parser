@@ -21,9 +21,10 @@ class ArcEagerModel:
         - Predict the actions and relations of the parser
     '''
 
-    def __init__(self, seq_l, e_dim, h_dim):
+    def __init__(self, seq_l_s, seq_l_b, e_dim, h_dim):
         # init parser parameters
-        self.seq_l = seq_l
+        self.seq_l_b = seq_l_b
+        self.seq_l_s = seq_l_s
 
         # as this is an arc-eager parser n_actions will always be 4
         self.a_num = 4
@@ -71,49 +72,57 @@ class ArcEagerModel:
     def build_model(self):
         ''' Build the neural tagger according to the specified config in the initialization'''
         
-        word_stack_input = Input(shape=(self.seq_l,), name="ws_in")
+        word_stack_input = Input(shape=(self.seq_l_s,), name="ws_in")
 
         word_stack_emb = Embedding(
                         input_dim       = self.w_num, 
                         output_dim      = self.e_dim,
-                        input_length    = self.seq_l,
-                        name            = "ws_emb", 
+                        input_length    = self.seq_l_s,
+                        name            = "word_emb_stack", 
                         mask_zero       = True)(word_stack_input)
+        word_stack_emb = Flatten()(word_stack_emb)
 
-        word_buffer_input = Input(shape=(self.seq_l,), name="wb_in")
-
+        word_buffer_input = Input(shape=(self.seq_l_b,), name="wb_in")
         word_buffer_emb = Embedding(
                         input_dim       = self.w_num, 
                         output_dim      = self.e_dim,
-                        input_length    = self.seq_l,
-                        name            = "wb_emb", 
+                        input_length    = self.seq_l_b,
+                        name            = "word_emb_buffer", 
                         mask_zero       = True)(word_buffer_input)
+        word_buffer_emb = Flatten()(word_buffer_emb)
 
-        pos_stack_input = Input(shape=(self.seq_l,), name="ps_in")
-
+        pos_stack_input = Input(shape=(self.seq_l_s,), name="ps_in")
         pos_stack_emb = Embedding(
                         input_dim       = self.p_num, 
                         output_dim      = self.e_dim,
-                        input_length    = self.seq_l,
-                        name            = "ps_emb", 
+                        input_length    = self.seq_l_s,
+                        name            = "pos_emb_stack", 
                         mask_zero       = True)(pos_stack_input)
+        pos_stack_emb = Flatten()(pos_stack_emb)
 
-        pos_buffer_input = Input(shape=(self.seq_l,), name="pb_in")
-
+        pos_buffer_input = Input(shape=(self.seq_l_b,), name="pb_in")
         pos_buffer_emb = Embedding(
                         input_dim       = self.p_num, 
                         output_dim      = self.e_dim,
-                        input_length    = self.seq_l,
-                        name            = "pb_emb", 
+                        input_length    = self.seq_l_b,
+                        name            = "pos_emb_buffer", 
                         mask_zero       = True)(pos_buffer_input)
+        pos_buffer_emb = Flatten()(pos_buffer_emb)
+
+        # print shapes
+        print("*** INPUTS")
+        print("    word_stack_input       =", word_stack_input.shape)
+        print("    word_buffer_input      =", word_buffer_input.shape)
+        print("    pos_stack_input        =", pos_stack_input.shape)
+        print("    pos_buffer_input       =", pos_buffer_input.shape)
         
         concat = concatenate([word_stack_emb, word_buffer_emb, pos_stack_emb, pos_buffer_emb])
-        flatten = Flatten()(concat)
+#        flatten = Flatten()(concat)
 
         if self.h_dim > 0:
-            hlayer = Dense(units=self.h_dim, activation = 'relu', name = 'hlayer')(flatten)
+            hlayer = Dense(units=self.h_dim, activation = 'relu', name = 'hlayer')(concat)
         else:
-            hlayer = flatten
+            hlayer = concat
 
         action_out = Dense(units = self.a_num, activation = 'softmax', name="action")(hlayer)
 
@@ -122,13 +131,14 @@ class ArcEagerModel:
         self.model = Model([word_stack_input, word_buffer_input, pos_stack_input, pos_buffer_input], [action_out, relation_out])
 
         print("*** VOCABULARY")
-        print("    words_vocab      =", self.w_num)
-        print("    postags_vocab    =", self.p_num)
-        print("    relations_vocab  =", self.r_num)
+        print("    words_vocab            =", self.w_num)
+        print("    postags_vocab          =", self.p_num)
+        print("    relations_vocab        =", self.r_num)
         print("*** PARSER MODEL")
-        print("    sequence_length  =", self.seq_l)
-        print("    embeddings_dim   =", self.e_dim)
-        print("    dense_dim        =", self.h_dim)
+        print("    sequence_length stack  =", self.seq_l_s)
+        print("    sequence_length buffer =", self.seq_l_b)
+        print("    embeddings_dim         =", self.e_dim)
+        print("    dense_dim              =", self.h_dim)
     
     def compile_model(self, loss, optimizer, learning_rate, metrics):        
         # build model  
@@ -160,11 +170,11 @@ class ArcEagerModel:
 
         # pad
         # nota: al hacer esto ya no necesitamos trimmear los stakcs en ArcEagerConfig
-        w_stacks = pad_sequences(w_stacks, maxlen=self.seq_l, padding='pre', truncating='pre')
-        w_buffers = pad_sequences(w_buffers, maxlen=self.seq_l, padding='post', truncating='post')
+        w_stacks = pad_sequences(w_stacks, maxlen=self.seq_l_s, padding='pre', truncating='pre')
+        w_buffers = pad_sequences(w_buffers, maxlen=self.seq_l_b, padding='post', truncating='post')
         
-        p_stacks = pad_sequences(p_stacks, maxlen=self.seq_l, padding='pre', truncating='pre')
-        p_buffers = pad_sequences(p_buffers, maxlen=self.seq_l, padding='post', truncating='post')
+        p_stacks = pad_sequences(p_stacks, maxlen=self.seq_l_s, padding='pre', truncating='pre')
+        p_buffers = pad_sequences(p_buffers, maxlen=self.seq_l_b, padding='post', truncating='post')
 
         # convert to categorical
         if is_train:
@@ -271,18 +281,24 @@ class ArcEagerModel:
         h_dim       = None
         e_dim       = None
         for layer in (keras_model.get_config()['layers']):
-            if layer['class_name'] == 'Embedding':
-                seq_l = layer['config']['batch_input_shape'][1]
+            if layer['name'] == 'word_emb_stack':
+                seq_l_s = layer['config']['batch_input_shape'][1]
+                e_dim = layer['config']['output_dim']
+            
+            if layer["name"] == "word_emb_buffer":
+                seq_l_b = layer['config']['batch_input_shape'][1]
+            
                 e_dim = layer['config']['output_dim']
             if layer['name'] == 'hlayer':
                 h_dim = layer['config']['units']
 
-        print("[*] Model loaded")
-        print("    Sequence length: {}".format(seq_l))
-        print("    Embedding dimension: {}".format(e_dim))
-        print("    Hidden layer dimension: {}".format(h_dim))
+        print("*** MODEL LOADED")
+        print("    Sequence length Stack  = {}".format(seq_l_s))
+        print("    Sequence length Buffer = {}".format(seq_l_b))
+        print("    Embedding dimension    = {}".format(e_dim))
+        print("    Hidden layer dimension = {}".format(h_dim))
         
-        arcEagerModel = ArcEagerModel(seq_l, e_dim, h_dim)
+        arcEagerModel = ArcEagerModel(seq_l_s, seq_l_b, e_dim, h_dim)
         arcEagerModel.model = keras_model
 
         # load history
@@ -303,4 +319,5 @@ class ArcEagerModel:
             arcEagerModel.r_num = len(arcEagerModel.r_tok.word_index)+1
         
         print("[*] Model loaded from", model_path)
-        return arcEagerModel
+        
+        return arcEagerModel, seq_l_s, seq_l_b

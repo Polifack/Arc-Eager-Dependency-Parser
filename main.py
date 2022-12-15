@@ -11,7 +11,8 @@ if __name__=="__main__":
     parser.add_argument('--output', type=str, help='folder path to save the model or the predictions')
     
     # training arguments
-    parser.add_argument('--seq_l', type=int, default=2, help='sequence length')
+    parser.add_argument('--seq_l_b', type=int, default=2, help='sequence length for buffer')
+    parser.add_argument('--seq_l_s', type=int, default=2, help='sequence length for stack')
     parser.add_argument('--epochs', type=int, default=10, help='number of epochs')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
@@ -34,8 +35,8 @@ if __name__=="__main__":
         dev  = ConllTree.read_conllu_file(args.input + "/dev.conllu", filter_projective=False)
         
         # create parser and model
-        arcEagerModel = ArcEagerModel(args.seq_l, args.embedding_size, args.hidden_size)
-        arcEagerParser = ArcEagerParser(args.seq_l)
+        arcEagerModel = ArcEagerModel(args.seq_l_s, args.seq_l_b, args.embedding_size, args.hidden_size)
+        arcEagerParser = ArcEagerParser(args.seq_l_s, args.seq_l_b)
         
         print("[*] Building the model...")
         # build model tokenizers
@@ -73,8 +74,8 @@ if __name__=="__main__":
         test_w = [t.get_words() for t in test]
         test_p = [t.get_postags() for t in test]
 
-        arcEagerModel = ArcEagerModel.from_file(args.model)
-        arcEagerParser = ArcEagerParser(args.seq_l)
+        arcEagerModel, seq_l_s, seq_l_b = ArcEagerModel.from_file(args.model)
+        arcEagerParser = ArcEagerParser(seq_l_s, seq_l_b)
 
         print("[*] Predicting the test set...")
         test_pred = arcEagerParser.predict_dependency_tree_list(test_w, test_p, arcEagerModel)

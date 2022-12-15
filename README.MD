@@ -18,14 +18,25 @@ A custom script for create conda enviroment is provided in install.sh. It will c
 To train the model, run the following command:
 
 ```bash
-python main.py --input <input_folder> --output <output_folder> --seq_l <n> --epochs <epochs> --batch_size <batch_size> --lr <lr> --hidden_size <hidden_size> --embedding_size <embedding_size> [--postprocess]
+python main.py 
+    --input <input_folder> 
+    --output <output_folder> 
+    --seq_l_s <ns> 
+    --seq_l_b <nb>
+    --epochs <epochs> 
+    --batch_size <batch_size> 
+    --lr <lr> 
+    --hidden_size <hidden_size> 
+    --embedding_size <embedding_size> 
+    [--postprocess]
 ```
 
 Where:
 
 - input_folder: Folder containing the training data in conll-u format.
 - output_folder: Folder where the model will be saved.
-- n: Sequence length. Number of words from stack/buffer to be processed at the same time.
+- ns: Sequence length from the stack. Number of words from stack to be processed at the same time.
+- nb: Sequence length from the buffer. Number of words from buffer to be processed at the same time.
 - epochs: Number of epochs to train the model.
 - batch_size: Batch size.
 - lr: Learning rate.
@@ -79,7 +90,7 @@ The code is structured as follows:
 
 # Results
 
-Results are obtained using the evaluation script provided by the CoNLL 2018 shared task. We will employ the LAS and UAS metrics. We will perform experiments for different sequence lengths and different hidden sizes on the English-ParTUT and Spanish-GSD datasets.
+Results are obtained using the evaluation script provided by the CoNLL 2018 shared task. We will employ the LAS and UAS metrics. We will perform experiments for different sequence lengths and different hidden sizes on the English-ParTUT dataset.
 
 The results are the following:
 

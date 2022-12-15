@@ -19,11 +19,12 @@ class ArcEagerConfig:
     self.stack  = stack
     self.buffer = buffer
 
-  def get_train(self, words, postags, n=2):
+  def get_train(self, words, postags, n_stack=2, n_buffer=2):
     # take the n top words from the stack
-    stack = self.stack[-n:] if len(self.stack) >= n else self.stack
+    stack = self.stack[-n_stack:] if len(self.stack) >= n_stack else self.stack
+    
     # take the n top words from the buffer
-    buffer = self.buffer[:n] if len(self.buffer) >= n else self.buffer
+    buffer = self.buffer[:n_buffer] if len(self.buffer) >= n_buffer else self.buffer
 
     # get the words and postags of the stack and buffer
     stack_words = [words[i] for i in stack]
