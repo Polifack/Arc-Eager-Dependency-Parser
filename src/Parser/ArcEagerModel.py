@@ -4,10 +4,37 @@ from keras.models import Model, load_model
 from keras.optimizers import Adam, SGD
 from keras.layers import Input, concatenate, Dense, Embedding, Flatten, TimeDistributed, Dropout, Activation
 from keras.utils import plot_model
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 from pickle import dump, load
-from numpy import argmax
+from numpy import argmax, asarray, zeros
+from os.path import join
 
 from matplotlib import pyplot as plt
+
+def load_pretrained_word_embeddings(glove_dir, tokenizer, emb_dim):
+    print("[*] Loading pretrained word embeddings...")
+    embeddings_index = {}
+    f = open(join(glove_dir, 'glove.6B.100d.txt'))
+    for line in f:
+        values = line.split()
+        word = values[0]
+        coefs = asarray(values[1:], dtype='float32')
+        embeddings_index[word] = coefs
+    f.close()
+
+    print('[*] Found %s word vectors.' % len(embeddings_index))
+    word_index = tokenizer.word_index
+    embedding_matrix = asarray(zeros((len(word_index) + 1, emb_dim)))
+    
+    for word, i in word_index.items():
+        embedding_vector = embeddings_index.get(word)
+        if embedding_vector is not None:
+            # words not found in embedding index will be all-zeros.
+            embedding_matrix[i] = embedding_vector
+    
+    return embedding_matrix
+
+
 
 class ArcEagerModel:
     '''
@@ -21,7 +48,9 @@ class ArcEagerModel:
         - Predict the actions and relations of the parser
     '''
 
-    def __init__(self, seq_l_s, seq_l_b, e_dim, h_dim):
+    def __init__(self, seq_l_s, seq_l_b, e_dim, h_dim, h_act="relu", drop=0, glove_path=None):
+        self.glove_path = glove_path
+        
         # init parser parameters
         self.seq_l_b = seq_l_b
         self.seq_l_s = seq_l_s
@@ -41,6 +70,8 @@ class ArcEagerModel:
         # init keras model parameters
         self.e_dim = e_dim
         self.h_dim = h_dim
+        self.h_act = h_act
+        self.drop  = drop
         self.model = None
         self.hist  = None
 
@@ -71,24 +102,45 @@ class ArcEagerModel:
     
     def build_model(self):
         ''' Build the neural tagger according to the specified config in the initialization'''
-        
+
         word_stack_input = Input(shape=(self.seq_l_s,), name="ws_in")
-
-        word_stack_emb = Embedding(
-                        input_dim       = self.w_num, 
-                        output_dim      = self.e_dim,
-                        input_length    = self.seq_l_s,
-                        name            = "word_emb_stack", 
-                        mask_zero       = True)(word_stack_input)
-        word_stack_emb = Flatten()(word_stack_emb)
-
         word_buffer_input = Input(shape=(self.seq_l_b,), name="wb_in")
-        word_buffer_emb = Embedding(
-                        input_dim       = self.w_num, 
-                        output_dim      = self.e_dim,
-                        input_length    = self.seq_l_b,
-                        name            = "word_emb_buffer", 
-                        mask_zero       = True)(word_buffer_input)
+
+        # if we have a glove path, we load the pretrained word embeddings
+        if self.glove_path is not None:
+            emb_matrix = load_pretrained_word_embeddings(self.glove_path, self.w_tok, self.e_dim)
+
+            word_stack_emb = Embedding(
+                            input_dim       = self.w_num, 
+                            output_dim      = self.e_dim,
+                            weights         = [emb_matrix],
+                            input_length    = self.seq_l_s,
+                            name            = "word_emb_stack",
+                            trainable       = False,
+                            mask_zero       = True)(word_stack_input)
+            word_buffer_emb = Embedding(
+                            input_dim       = self.w_num, 
+                            output_dim      = self.e_dim,
+                            weights         = [emb_matrix],
+                            input_length    = self.seq_l_b,
+                            name            = "word_emb_buffer", 
+                            trainable       = False,
+                            mask_zero       = True)(word_buffer_input)    
+        else:
+            word_stack_emb = Embedding(
+                            input_dim       = self.w_num, 
+                            output_dim      = self.e_dim,
+                            input_length    = self.seq_l_s,
+                            name            = "word_emb_stack", 
+                            mask_zero       = True)(word_stack_input)
+            word_buffer_emb = Embedding(
+                            input_dim       = self.w_num, 
+                            output_dim      = self.e_dim,
+                            input_length    = self.seq_l_b,
+                            name            = "word_emb_buffer", 
+                            mask_zero       = True)(word_buffer_input)
+        
+        word_stack_emb = Flatten()(word_stack_emb)
         word_buffer_emb = Flatten()(word_buffer_emb)
 
         pos_stack_input = Input(shape=(self.seq_l_s,), name="ps_in")
@@ -117,12 +169,18 @@ class ArcEagerModel:
         print("    pos_buffer_input       =", pos_buffer_input.shape)
         
         concat = concatenate([word_stack_emb, word_buffer_emb, pos_stack_emb, pos_buffer_emb])
-#        flatten = Flatten()(concat)
 
+        # if we have dropout, add it
+        if self.drop > 0:
+            concat = Dropout(self.drop)(concat)
+
+        # if we have a hidden layer, add it
         if self.h_dim > 0:
-            hlayer = Dense(units=self.h_dim, activation = 'relu', name = 'hlayer')(concat)
+            hlayer = Dense(units=self.h_dim, activation = self.h_act, name = 'hlayer')(concat)
         else:
             hlayer = concat
+
+        hlayer = Dropout(0.5)(hlayer)
 
         action_out = Dense(units = self.a_num, activation = 'softmax', name="action")(hlayer)
 
@@ -195,7 +253,14 @@ class ArcEagerModel:
         dev_x, dev_y = self.prepare_data(dev_set)
 
         # train
-        self.hist = self.model.fit(train_x, train_y, epochs=epochs, batch_size=batch_size, verbose=verbose, validation_data=(dev_x, dev_y))
+        self.hist = self.model.fit(train_x, 
+                                   train_y, 
+                                   epochs=epochs, 
+                                   batch_size=batch_size, 
+                                   verbose=verbose, 
+                                   validation_data=(dev_x, dev_y),
+                                   callbacks=[EarlyStopping(monitor='val_action_acc', patience=3, verbose=1, mode='auto')]
+                                   )
 
     def predict(self, data):
         ''' Predicts the action and relation for the given data.

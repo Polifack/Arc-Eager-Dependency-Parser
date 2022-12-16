@@ -17,8 +17,11 @@ if __name__=="__main__":
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate')
     parser.add_argument('--optimizer', type=str, default='adam', choices=['adam', 'sgd', 'rmsprop'], help='optimizer')
+    parser.add_argument('--activation', type=str, default='relu', choices=['relu', 'tanh', 'sigmoid'], help='activation function of hidden layer')
     parser.add_argument('--hidden_size', type=int, default=256, help='hidden size')
     parser.add_argument('--embedding_size', type=int, default=128, help='embedding size')
+    parser.add_argument('--dropout', type=float, default=0, help='dropout rate')
+    parser.add_argument('--glove_path', type=str, default=None, help='glove path')
 
     # evaluation arguments
     parser.add_argument('--model', type=str, help='saved model path')
@@ -35,7 +38,7 @@ if __name__=="__main__":
         dev  = ConllTree.read_conllu_file(args.input + "/dev.conllu", filter_projective=False)
         
         # create parser and model
-        arcEagerModel = ArcEagerModel(args.seq_l_s, args.seq_l_b, args.embedding_size, args.hidden_size)
+        arcEagerModel = ArcEagerModel(args.seq_l_s, args.seq_l_b, args.embedding_size, args.hidden_size, args.activation)
         arcEagerParser = ArcEagerParser(args.seq_l_s, args.seq_l_b)
         
         print("[*] Building the model...")

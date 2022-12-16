@@ -1,0 +1,16 @@
+Results:
+
+GLOVE EMBEDDINGS and DROPOUT TWEAKING
+
+Stack       Buffer      Embs        Hidden      Dropout     LR      early_stop  | UAS       LAS     
+--------------------------------------------------------------------------------|-------------------
+4           2           100         256         0.5         0.001   yes         | 75.82     67.90   
+4           2           100         256         0.3         0.001   yes         | 76.64     68.78
+4           2           100         256         0.1         0.001   yes         | 76.06     68.37
+--------------------------------------------------------------------------------|-------------------
+2           4           100         256         0.5         0.001   yes         | 78.08     70.36
+2           4           100         256         0.3         0.001   yes         | 75.88     68.05
+2           4           100         256         0.1         0.001   yes         | 74.30     67.14
+
+The best results are obtanied with a dropout 0.5 for a 4-buffer and 2-stack parser. 
+For a 2-buffer and 4-stack parser, the best results are obtained with a dropout 0.3.
