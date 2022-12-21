@@ -1,5 +1,53 @@
 from .ConllTreeConstants import *
 
+class DependencyEdge:
+    '''
+    Class that represents a dependency edge between two nodes in a 
+    dependency tree and the relation type that relates them. We will
+    call a DependencyArc the tuple (dependant, head) and a DependencyEdge
+    the tuple (dependant, head, relation).
+    
+    We say that a dependency edge is left if the
+    dependant is to the left of the head, and right otherwise.
+    '''
+    def __init__(self, dependant, head, relation):
+        self.dependant = dependant
+        self.head = head
+        self.relation = relation
+
+    def is_left_arc(self):
+        return self.dependant < self.head
+    
+    def is_right_arc(self):
+        return self.dependant > self.head
+
+    def get_arc(self):
+        return (self.dependant, self.head)
+
+    def is_head(self, node):
+        return self.head == node
+    
+    def is_dependant(self, node):
+        return self.dependant == node
+
+    def is_root_arc(self):
+        return self.head == 0
+
+    def __repr__(self):
+        return f'{self.dependant}({self.relation})->{self.head}'
+
+    def __eq__(self, other):
+        return self.dependant == other.dependant and self.head == other.head and self.relation == other.relation
+    def __gt__(self, other):
+        return self.dependant > other.dependant
+    def __ge__(self, other):
+        return self.dependant >= other.dependant
+    def __lt__(self, other):
+        return self.dependant < other.dependant
+    def __le__(self, other):
+        return self.dependant < other.dependant
+
+
 class ConllNode:
     def __init__(self, wid, form, lemma=None, upos=None, xpos=None, feats=None, head=None, deprel=None, deps=None, misc=None):
         self.id = wid                           # word id
@@ -18,6 +66,9 @@ class ConllNode:
     
     def __repr__(self):
         return '\t'.join(str(e) for e in list(self.__dict__.values()))+'\n'
+
+    def get_edge(self):
+        return DependencyEdge(self.id, self.head, self.relation)
 
     @staticmethod
     def from_string(conll_str):

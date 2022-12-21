@@ -1,5 +1,6 @@
 from .ArcEagerConfig import ArcEagerConfig
 from ..ConllTree.ConllTree import ConllTree
+from ..ConllTree.ConllNode import DependencyEdge
 from .constants import *
 
 from keras.utils import pad_sequences
@@ -26,10 +27,12 @@ class ArcEagerParser:
     the next action given a configuration.
     '''
   
-    def __init__(self, seq_l_s=2, seq_l_b=2):    
+    def __init__(self, seq_l_s=2, seq_l_b=2, seq_l_lc=2, seq_l_rc=2):    
         # training sequence length (i.e. the number of words/postags to consider)    
         self.seq_l_s        = seq_l_s
         self.seq_l_b        = seq_l_b
+        self.seq_l_lc       = seq_l_lc
+        self.seq_l_rc       = seq_l_rc
         
         # store words and postags to obtain a configuration to train the oracle
         self.words          = None
@@ -38,6 +41,7 @@ class ArcEagerParser:
         # arc-eager parser state machine fields
         self.conll_tree     = None
         self.target_edges   = None
+        self.current_edges  = []
         self.buffer         = []
         self.stack          = []
         self.configuration  = []
@@ -56,8 +60,6 @@ class ArcEagerParser:
         self.stack          = []
         self.buffer         = []
 
-
-
     def init_sentence_raw(self, words, postags):
         '''
         Given a raw sentence shaped as a string initializes
@@ -68,8 +70,9 @@ class ArcEagerParser:
         self.reset()
 
         # init sentence data
-        self.words  = words
-        self.postags = postags
+        self.words          = words
+        self.postags        = postags
+        self.current_edges  = []
 
         # init stack and buffer
         self.stack  = [0]
@@ -88,6 +91,7 @@ class ArcEagerParser:
 
         # init conll_tree data
         self.conll_tree    = conll_tree
+        self.current_edges = []
         self.target_edges  = conll_tree.get_edges()      # [((0,0),-norel-), ((1,4),root), ((2,4),mark), ...]
         self.words         = conll_tree.get_words()      # [u'ROOT', u'El', u'gobierno', u'central', u'ha', ...]
         self.postags       = conll_tree.get_postags()    # [u'ROOT', u'DT', u'NN', u'JJ', u'VBZ', ...]
@@ -192,7 +196,7 @@ class ArcEagerParser:
         '''
 
         self.init_tree(dependency_tree)
-        
+        train_configs = []
         while self.buffer != []:
             # get action
             valid_actions, arc = self.get_next_action()
@@ -205,9 +209,17 @@ class ArcEagerParser:
               break
             
             # update configuration
+            if arc: self.current_edges.append(arc)
             config = ArcEagerConfig(action, arc, copy.deepcopy(self.stack), copy.deepcopy(self.buffer))
             self.configuration.append(config)
-            
+            train_configs.append(config.get_train(self.words, 
+                                                  self.postags, 
+                                                  self.current_edges, 
+                                                  n_stack=self.seq_l_s, 
+                                                  n_buffer=self.seq_l_b,
+                                                  n_lchild=self.seq_l_lc,
+                                                  n_rchild=self.seq_l_rc))
+
             # run action
             if action == A_LEFT_ARC: 
                 self.left_arc()
@@ -221,7 +233,7 @@ class ArcEagerParser:
             elif action == A_SHIFT: 
                 self.shift()
         
-        return [c.get_train(self.words, self.postags, n_stack=self.seq_l_s, n_buffer=self.seq_l_b) for c in  self.configuration]
+        return train_configs
 
     #############
     # PREDICTION
@@ -232,7 +244,13 @@ class ArcEagerParser:
         Returns an array with the valid actions to take at any given moment
         '''
 
-        current_config = self.configuration[-1].get_train(self.words, self.postags, n_stack=self.seq_l_s, n_buffer=self.seq_l_b)
+        current_config = self.configuration[-1].get_train(self.words, 
+                                                          self.postags, 
+                                                          self.current_edges, 
+                                                          n_stack=self.seq_l_s, 
+                                                          n_buffer=self.seq_l_b,
+                                                          n_lchild=self.seq_l_lc,
+                                                          n_rchild=self.seq_l_rc)
         valid_actions, relation  = oracle.predict([current_config])
 
         # filter the predicted actions with the valid actions
@@ -281,19 +299,15 @@ class ArcEagerParser:
             action = np.argmax(valid_actions)
             arc = None
 
-            # if no more actions can be executed, break
-            if np.sum(valid_actions)==0: 
-              config = ArcEagerConfig(A_REDUCE, arc, copy.deepcopy(self.stack), copy.deepcopy(self.buffer))
-              self.configuration.append(config)
-              break
-
             # run action
             if action == A_LEFT_ARC:
-              arc = ((self.stack[-1], self.buffer[0]), rel)
+              arc = DependencyEdge(self.stack[-1], self.buffer[0], rel)
+              self.current_edges.append(arc)
               self.left_arc()
             
             elif action == A_RIGHT_ARC:
-              arc = ((self.buffer[0], self.stack[-1]), rel)
+              arc = DependencyEdge(self.buffer[0], self.stack[-1], rel)
+              self.current_edges.append(arc)
               self.right_arc()
             
             elif action == A_REDUCE: 
@@ -306,21 +320,14 @@ class ArcEagerParser:
             config = ArcEagerConfig(action, arc, copy.deepcopy(self.stack), copy.deepcopy(self.buffer))
             self.configuration.append(config)
         
-        self.build_conll_tree()
-        return self.conll_tree
+        return self.build_conll_tree()
 
     def build_conll_tree(self):
         '''
         Builds a conll tree from the configuration
         '''
-        # get the arcs from the configuration
-        arcs = []
-        for c in self.configuration:
-            if c.arc is not None:
-                arcs.append(c.arc)
-        arcs = sorted(arcs, key=lambda x: x[0][0])
-        # build the tree
-        self.conll_tree = ConllTree.build_tree(self.words[1:], self.postags[1:], arcs)
+        self.conll_tree = ConllTree.build_tree(self.words[1:], self.postags[1:], sorted(self.current_edges))
+        return self.conll_tree
 
     #############
     # EVALUATION
@@ -353,37 +360,34 @@ class ArcEagerParser:
         in the target_edges list. After that, removes the
         arc from the list
         ''' 
-        for arc in self.target_edges:
-            (d,h), r = arc
-            if (d, h) == test_arc:
-                self.target_edges.remove(arc)
-                return arc
+        for edge in self.target_edges:
+            if test_arc==edge.get_arc():
+                self.target_edges.remove(edge)
+                return edge
         return None
     
-    def check_head_assigned(self, w):
+    def check_head_assigned(self, n):
         '''
-        Checks if a given word has its head already assigned
-        in the list of configurations.
+        A node has its head assigned if the head
+        is pressent on the 'current edges' list as
+        the dependent of some relation.
+        
+        return any(arc.is_dependent(n) for arc in self.current_edges)
         '''
-        for config in self.configuration:
-            if config.arc is None:
-                continue
-            
-            (d,h),r = config.arc
-            if (w==d):
+        for edge in self.current_edges:
+            if edge.is_dependant(n):
                 return True
         return False
 
     def check_remaining_head(self, w):
         '''
-        Checks if a given word is still head to any word
-        in the target arcs.
+        A node has remaining heaads if the node 
+        is still present on the 'target edges' list
+        as the head of some relation.
+
+        return any(arc.is_head(n) for arc in self.target_edges)
         '''
-        for arc in self.target_edges:
-            if self.target_edges is None:
-                continue
-            
-            (d,h),r = arc
-            if (w==h):
+        for edge in self.target_edges:
+            if edge.is_head(w):
                 return True
         return False

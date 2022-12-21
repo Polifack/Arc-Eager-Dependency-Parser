@@ -1,10 +1,11 @@
 from keras.preprocessing.text import Tokenizer
 from keras.utils import to_categorical, pad_sequences
 from keras.models import Model, load_model
-from keras.optimizers import Adam, SGD
+from keras.optimizers import Adam, SGD, Adagrad
 from keras.layers import Input, concatenate, Dense, Embedding, Flatten, TimeDistributed, Dropout, Activation
 from keras.utils import plot_model
-from keras.callbacks import EarlyStopping, ModelCheckpoint
+from keras.callbacks import EarlyStopping
+from keras.regularizers import L2
 from pickle import dump, load
 from numpy import argmax, asarray, zeros
 from os.path import join
@@ -14,7 +15,7 @@ from matplotlib import pyplot as plt
 def load_pretrained_word_embeddings(glove_dir, tokenizer, emb_dim):
     print("[*] Loading pretrained word embeddings...")
     embeddings_index = {}
-    f = open(join(glove_dir, 'glove.6B.100d.txt'))
+    f = open(join(glove_dir, 'glove.6B.50d.txt'))
     for line in f:
         values = line.split()
         word = values[0]
@@ -48,12 +49,16 @@ class ArcEagerModel:
         - Predict the actions and relations of the parser
     '''
 
-    def __init__(self, seq_l_s, seq_l_b, e_dim, h_dim, h_act="relu", drop=0, glove_path=None):
+    def __init__(self, seq_l_s, seq_l_b, seq_l_lc, seq_l_rc, e_dim, h_dim, h_act="relu", drop=0, glove_path=None):
         self.glove_path = glove_path
         
         # init parser parameters
-        self.seq_l_b = seq_l_b
-        self.seq_l_s = seq_l_s
+        self.seq_l_b = seq_l_b      # buffer length
+        self.seq_l_s = seq_l_s      # stack length
+
+        ## temp
+        self.seq_l_rc = seq_l_rc    # rightmost children length
+        self.seq_l_lc = seq_l_lc    # leftmost children length
 
         # as this is an arc-eager parser n_actions will always be 4
         self.a_num = 4
@@ -106,6 +111,12 @@ class ArcEagerModel:
         word_stack_input = Input(shape=(self.seq_l_s,), name="ws_in")
         word_buffer_input = Input(shape=(self.seq_l_b,), name="wb_in")
 
+
+        if self.seq_l_lc > 0:
+            word_lc_input = Input(shape=(self.seq_l_lc,), name="wc_in")
+        if self.seq_l_rc > 0:
+            word_rc_input = Input(shape=(self.seq_l_lc,), name="wr_in")
+
         # if we have a glove path, we load the pretrained word embeddings
         if self.glove_path is not None:
             emb_matrix = load_pretrained_word_embeddings(self.glove_path, self.w_tok, self.e_dim)
@@ -125,7 +136,29 @@ class ArcEagerModel:
                             input_length    = self.seq_l_b,
                             name            = "word_emb_buffer", 
                             trainable       = False,
-                            mask_zero       = True)(word_buffer_input)    
+                            mask_zero       = True)(word_buffer_input)
+
+            if self.seq_l_lc > 0:
+                word_lc_emb = Embedding(
+                            input_dim       = self.w_num, 
+                            output_dim      = self.e_dim,
+                            weights         = [emb_matrix],
+                            input_length    = self.seq_l_lc,
+                            name            = "word_emb_lc", 
+                            trainable       = False,
+                            mask_zero       = True)(word_lc_input)
+                word_lc_emb = Flatten()(word_lc_emb)
+            if self.seq_l_rc > 0:
+                word_rc_emb = Embedding(
+                            input_dim       = self.w_num, 
+                            output_dim      = self.e_dim,
+                            weights         = [emb_matrix],
+                            input_length    = self.seq_l_rc,
+                            name            = "word_emb_rc", 
+                            trainable       = False,
+                            mask_zero       = True)(word_rc_input)
+                word_rc_emb = Flatten()(word_rc_emb)
+            
         else:
             word_stack_emb = Embedding(
                             input_dim       = self.w_num, 
@@ -139,7 +172,26 @@ class ArcEagerModel:
                             input_length    = self.seq_l_b,
                             name            = "word_emb_buffer", 
                             mask_zero       = True)(word_buffer_input)
-        
+
+            if self.seq_l_lc > 0:
+                word_lc_emb = Embedding(
+                            input_dim       = self.w_num, 
+                            output_dim      = self.e_dim,
+                            input_length    = self.seq_l_lc,
+                            name            = "word_emb_lc", 
+                            mask_zero       = True)(word_lc_input)
+                word_lc_emb = Flatten()(word_lc_emb)
+            if self.seq_l_rc > 0:
+                word_rc_emb = Embedding(
+                            input_dim       = self.w_num, 
+                            output_dim      = self.e_dim,
+                            input_length    = self.seq_l_lc,
+                            name            = "word_emb_rc", 
+                            mask_zero       = True)(word_rc_input)   
+                word_rc_emb = Flatten()(word_rc_emb)         
+            
+
+
         word_stack_emb = Flatten()(word_stack_emb)
         word_buffer_emb = Flatten()(word_buffer_emb)
 
@@ -168,7 +220,19 @@ class ArcEagerModel:
         print("    pos_stack_input        =", pos_stack_input.shape)
         print("    pos_buffer_input       =", pos_buffer_input.shape)
         
+        print("*** EMBEDDINGS")
+        print("    word_stack_emb         =", word_stack_emb.shape)
+        print("    word_buffer_emb        =", word_buffer_emb.shape)
+        print("    pos_stack_emb          =", pos_stack_emb.shape)
+        print("    pos_buffer_emb         =", pos_buffer_emb.shape)
+
+        
         concat = concatenate([word_stack_emb, word_buffer_emb, pos_stack_emb, pos_buffer_emb])
+
+        if self.seq_l_lc > 0:
+            concat = concatenate([concat, word_lc_emb])
+        if self.seq_l_rc > 0:
+            concat = concatenate([concat, word_rc_emb])
 
         # if we have dropout, add it
         if self.drop > 0:
@@ -176,7 +240,8 @@ class ArcEagerModel:
 
         # if we have a hidden layer, add it
         if self.h_dim > 0:
-            hlayer = Dense(units=self.h_dim, activation = self.h_act, name = 'hlayer')(concat)
+            hlayer = Dense(units=self.h_dim, activation = self.h_act, name = 'hlayer', bias_regularizer=L2(1e-8),
+                           activity_regularizer=L2(1e-8))(concat)
         else:
             hlayer = concat
 
@@ -186,7 +251,14 @@ class ArcEagerModel:
 
         relation_out = Dense(units = self.r_num, activation = 'softmax', name="relation")(hlayer)
 
-        self.model = Model([word_stack_input, word_buffer_input, pos_stack_input, pos_buffer_input], [action_out, relation_out])
+        x_in  = [word_stack_input, word_buffer_input, pos_stack_input, pos_buffer_input]
+        y_out = [action_out, relation_out]
+        if self.seq_l_lc > 0:
+            x_in.append(word_lc_input)
+        if self.seq_l_rc > 0:
+            x_in.append(word_rc_input)
+
+        self.model = Model(inputs=x_in, outputs=y_out)
 
         print("*** VOCABULARY")
         print("    words_vocab            =", self.w_num)
@@ -207,6 +279,9 @@ class ArcEagerModel:
         
         elif optimizer=='sgd':
             optim = SGD(learning_rate)
+        
+        elif optimizer == 'adagrad':
+            optim = Adagrad(learning_rate)
 
         self.model.compile(optimizer=optim, loss=loss, metrics=metrics)
         print("*** COMPILATION")
@@ -220,11 +295,11 @@ class ArcEagerModel:
             tokenizes, pads and converts to categorical the data.
         '''
         # tokenize
-        w_stacks = self.w_tok.texts_to_sequences([c["sw"] for c in data])
-        w_buffers = self.w_tok.texts_to_sequences([c["bw"] for c in data])
+        w_stacks = self.w_tok.texts_to_sequences([c.stack_words for c in data])
+        w_buffers = self.w_tok.texts_to_sequences([c.buffer_words for c in data])
         
-        p_stacks = self.p_tok.texts_to_sequences([c["sp"] for c in data])
-        p_buffers = self.p_tok.texts_to_sequences([c["bp"] for c in data])
+        p_stacks = self.p_tok.texts_to_sequences([c.stack_postags for c in data])
+        p_buffers = self.p_tok.texts_to_sequences([c.buffer_postags for c in data])
 
         # pad
         # nota: al hacer esto ya no necesitamos trimmear los stakcs en ArcEagerConfig
@@ -234,15 +309,35 @@ class ArcEagerModel:
         p_stacks = pad_sequences(p_stacks, maxlen=self.seq_l_s, padding='pre', truncating='pre')
         p_buffers = pad_sequences(p_buffers, maxlen=self.seq_l_b, padding='post', truncating='post')
 
+        if self.seq_l_lc > 0:
+            w_lc = self.w_tok.texts_to_sequences([c.left_child_words for c in data])
+            w_lc = pad_sequences(w_lc, maxlen=self.seq_l_lc, padding='post', truncating='post')
+        else:
+            w_lc = None
+        if self.seq_l_rc > 0:
+            w_rc = self.w_tok.texts_to_sequences([c.right_child_words for c in data])
+            w_rc = pad_sequences(w_rc, maxlen=self.seq_l_rc, padding='post', truncating='post')
+        else:
+            w_rc = None
+
         # convert to categorical
         if is_train:
-            a_cat = to_categorical([c["a"] for c in data], num_classes=self.a_num)
-            r_cat = to_categorical(self.r_tok.texts_to_sequences([c["r"] for c in data]), num_classes=self.r_num)
+            a_cat = to_categorical([c.action for c in data], num_classes=self.a_num)
+            r_cat = to_categorical(self.r_tok.texts_to_sequences([c.relation for c in data]), num_classes=self.r_num)
         else:
             a_cat = None
             r_cat = None
 
-        return [w_stacks, w_buffers, p_stacks, p_buffers], [a_cat, r_cat]
+        x_in  = [w_stacks, w_buffers, p_stacks, p_buffers]
+        y_out = [a_cat, r_cat]
+        
+        if self.seq_l_lc > 0:
+            x_in.append(w_lc)
+        
+        if self.seq_l_rc > 0:
+            x_in.append(w_rc)
+
+        return x_in, y_out
 
     def train(self, train_set, dev_set, epochs, batch_size, verbose=1):
         ''' Trains the neural tagger on the specified train_set and dev_set
@@ -342,18 +437,29 @@ class ArcEagerModel:
         
         # retrieve model parameters
         keras_model = load_model(model_path+"/model.h5")
-        seq_l       = None
         h_dim       = None
         e_dim       = None
+        seq_l_s     = None
+        seq_l_b     = None
+        seq_l_lc    = None
+        seq_l_rc    = None
         for layer in (keras_model.get_config()['layers']):
             if layer['name'] == 'word_emb_stack':
                 seq_l_s = layer['config']['batch_input_shape'][1]
                 e_dim = layer['config']['output_dim']
+
+            if layer['name'] == 'word_emb_rc':
+                seq_l_rc = layer['config']['batch_input_shape'][1]
+                e_dim = layer['config']['output_dim']
+            
+            if layer['name'] == 'word_emb_lc':
+                seq_l_lc = layer['config']['batch_input_shape'][1]
+                e_dim = layer['config']['output_dim']
             
             if layer["name"] == "word_emb_buffer":
                 seq_l_b = layer['config']['batch_input_shape'][1]
-            
                 e_dim = layer['config']['output_dim']
+
             if layer['name'] == 'hlayer':
                 h_dim = layer['config']['units']
 
@@ -363,7 +469,7 @@ class ArcEagerModel:
         print("    Embedding dimension    = {}".format(e_dim))
         print("    Hidden layer dimension = {}".format(h_dim))
         
-        arcEagerModel = ArcEagerModel(seq_l_s, seq_l_b, e_dim, h_dim)
+        arcEagerModel = ArcEagerModel(seq_l_s, seq_l_b, seq_l_lc, seq_l_rc, e_dim, h_dim)
         arcEagerModel.model = keras_model
 
         # load history

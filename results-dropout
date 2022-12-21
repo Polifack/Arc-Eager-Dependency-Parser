@@ -1,6 +1,6 @@
 Results:
 
-GLOVE EMBEDDINGS and DROPOUT TWEAKING
+GLOVE EMBEDDINGS (100d) and DROPOUT TWEAKING
 
 Stack       Buffer      Embs        Hidden      Dropout     LR      early_stop  | UAS       LAS     
 --------------------------------------------------------------------------------|-------------------
@@ -14,3 +14,12 @@ Stack       Buffer      Embs        Hidden      Dropout     LR      early_stop  
 
 The best results are obtanied with a dropout 0.5 for a 4-buffer and 2-stack parser. 
 For a 2-buffer and 4-stack parser, the best results are obtained with a dropout 0.3.
+
+
+GLOVE EMBEDDINGS (50d)
+LEFTMOST OF LEFTMOST CHILD OF 2 TOP WORDS OF THE STACK AND 2 BOTTOM WORDS OF THE BUFFER?
+
+python main.py train --input ./data/UD_English-ParTUT --output ./models --seq_l_b 3 --seq_l_s 3 --optimizer adagrad --lr 0.01 --epochs 20 --embedding_size 50 --hidden_size 200 --glove_path /home/poli/Tools/glove
+
+UAS        |     78.43 |     78.43 |     78.43 |     78.43
+LAS        |     67.43 |     67.43 |     67.43 |     67.43

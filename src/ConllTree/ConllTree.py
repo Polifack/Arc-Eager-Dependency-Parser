@@ -1,4 +1,4 @@
-from .ConllNode import ConllNode
+from .ConllNode import ConllNode, DependencyEdge
 from .ConllTreeConstants import *
 
 class ConllTree:
@@ -14,7 +14,7 @@ class ConllTree:
         shaped as ((d,h),r) where d is the dependant of the relation,
         h the head of the relation and r the relationship type
         '''
-        return list(map((lambda x :((x.id, x.head), x.relation)), self.nodes))
+        return list(map((lambda x: x.get_edge()), self.nodes))
     
     def get_arcs(self):
         '''
@@ -22,13 +22,13 @@ class ConllTree:
         shaped as (d,h) where d is the dependant of the relation,
         and h the head of the relation.
         '''
-        return list(map((lambda x :(x.id, x.head)), self.nodes))
+        return list(map((lambda x: x.get_edge().get_arc()), self.nodes))
 
     def get_relations(self):
         '''
         Return a list of relationships betwee nodes
         '''
-        return list(map((lambda x :x.relation), self.nodes))
+        return list(map((lambda x: x.relation), self.nodes))
     
     def get_sentence(self):
         '''
@@ -101,8 +101,10 @@ class ConllTree:
         is projective (i.e. no edges are crossing)
         '''
         arcs = self.get_arcs()
-        for (i,j) in arcs:
-            for (k,l) in arcs:
+        for arc_1 in arcs:
+            (i,j) = arc_1
+            for arc_2 in arcs:
+                (k,l) = arc_2
                 if (i,j) != (k,l) and min(i,j) < min(k,l) < max(i,j) < max(k,l):
                     return False
         return True
@@ -144,8 +146,8 @@ class ConllTree:
                 return root
         
         # ensure root
-        self.nodes[root].head = 0
-        self.nodes[root].relation = 'root'
+        self.get_node(root).head = 0
+        self.get_node(root).relation = 'root'
 
         return root
 
@@ -225,27 +227,22 @@ class ConllTree:
     def build_tree(words, postags, relations):
         '''
         Build a ConllTree from a set of words, part of speech tags
-        and dependency relations shaped as r = ((d,h),r)
+        and dependency relations
         '''
         nodes = []
         nodes.append(ConllNode.dummy_root())
         for i in range(len(words)):
-
-            # get the relation for the current word
-            # if no relation is found, set the head to 0
-            r  = list(filter(lambda x: x[0][0]==i+1, relations))
-            if len(r)==0:
-                h = 0
-                dr = 'root'
+            edge = list(filter(lambda x: x.is_dependant(i+1), relations))
+            if len(edge) == 0:
+                edge = DependencyEdge(head=D_NULLHEAD, relation=D_EMPTYREL, dependant=i+1)
             else:
-                h  = r[0][0][1]
-                dr = r[0][1]
+                edge = edge[0]
 
-            nodes.append(ConllNode(wid=i+1, 
+            nodes.append(ConllNode(wid=edge.dependant, 
                                     form=words[i], 
                                     upos=postags[i], 
-                                    head=h, 
-                                    deprel=dr))
+                                    head=edge.head, 
+                                    deprel=edge.relation))
         return ConllTree(nodes[1:])
 
     @staticmethod
